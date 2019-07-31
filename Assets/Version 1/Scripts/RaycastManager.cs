@@ -38,7 +38,7 @@ public class RaycastManager : MonoBehaviour
         {
             Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
-            if (Physics.Raycast(ray, out hit, 64))
+            if (Physics.Raycast(ray, out hit, 8))
             {
                 // FloorToInt(x+1) == CeilToInt(x), using Floor for consitency with rest of marching cube code
                 Vector3Int[] points = new Vector3Int[] {
@@ -61,7 +61,7 @@ public class RaycastManager : MonoBehaviour
                         Vector3Int chunkPoint = new Vector3Int((int)localPoint.x, (int)localPoint.y, (int)localPoint.z);
 
                         Vector2 v = chunk.GetValueAtPoint(chunkPoint);
-                        chunk.ModifyChunkAtPoint(chunkPoint, new Vector2(Mathf.Clamp(v.x + 1f * Time.deltaTime, -1, 1), v.y));
+                        chunk.ModifyChunkAtPoint(chunkPoint, new Vector2(Mathf.Clamp(v.x + 1f * Time.deltaTime*(1-hit.distance/8f), -1, 1), v.y));
                     }
                 }
             }
@@ -69,7 +69,7 @@ public class RaycastManager : MonoBehaviour
         {
             Ray ray = new Ray(mainCamera.transform.position, mainCamera.transform.forward);
             RaycastHit hit;
-            if (Physics.Raycast(ray, out hit, 16))
+            if (Physics.Raycast(ray, out hit, 8))
             {
                 // FloorToInt(x+1) == CeilToInt(x), using Floor for consitency with rest of marching cube code
                 Vector3Int[] points = new Vector3Int[] {
@@ -92,7 +92,7 @@ public class RaycastManager : MonoBehaviour
                         Vector3Int chunkPoint = new Vector3Int((int)localPoint.x, (int)localPoint.y, (int)localPoint.z);
 
                         float v = chunk.GetValueAtPoint(chunkPoint).x;
-                        chunk.ModifyChunkAtPoint(chunkPoint, new Vector2(Mathf.Clamp(v - 1f * Time.deltaTime, -1, 1), currentMaterial));
+                        chunk.ModifyChunkAtPoint(chunkPoint, new Vector2(Mathf.Clamp(v - 1f * Time.deltaTime * (1 - hit.distance / 8f), -1, 1), currentMaterial));
                     }
                 }
             }

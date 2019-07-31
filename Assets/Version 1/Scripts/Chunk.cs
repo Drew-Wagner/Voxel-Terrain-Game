@@ -33,7 +33,6 @@ public class Chunk : MonoBehaviour
     public bool hasRequestMeshBuild;
 
     bool pointsHaveBeenModified = false;
-    float lastMeshUpdateTime = -1;
 
     static float scaler;
 
@@ -56,6 +55,10 @@ public class Chunk : MonoBehaviour
     {
         gameObject.SetActive(false);
         // Here is where we will save the chunk before unloading it.
+        if (modifiedPoints.Count > 0)
+        {
+
+        }
         mesh.Clear();
         modifiedPoints.Clear();
         points = null;
@@ -85,7 +88,6 @@ public class Chunk : MonoBehaviour
         points = new Vector2[chunkSize * chunkSize * chunkSize];
         gameObject.SetActive(true);
 
-        lastMeshUpdateTime = -1;
         pointsHaveBeenGenerated = false;
         pointsHaveBeenModified = true;
 
@@ -310,7 +312,6 @@ public class Chunk : MonoBehaviour
                     hasRequestMeshBuild = true;
                     //prevTask.Dispose();
                     ChunkManager.instance.EnqueueChunk(this);
-                    lastMeshUpdateTime = Time.time;
                 }
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
