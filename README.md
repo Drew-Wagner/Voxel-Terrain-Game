@@ -8,4 +8,10 @@ In the end, even the GPU was not able to handle the terrain to the extent I want
     
 Still, I ran into some major frame rate problems in certain situations. My solution, which I have yet to have the time to implement, is to have the Tasks post the prepared Mesh data to a queue, managed by the ChunkManager, instead of having the Chunk's own coroutine observe it. The ChunkManager will then dequeue the Mesh data and ensure that only a reasonable number of meshes are prepared per frame. If the nearby chunks are created when the player first loads into the map (or teleports), then the latency of the mesh generation shouldn't be noticeable.
 
-More GIFs, ideas, plans, and info coming soon... Don't forget to check back!
+## Update - July 31st, 2019
+
+All known framerate issues due to terrain have been fixed, at least for reasonable view distances (< 64 on my computer). There were many many problems that led to the framerate issues. In the process of debugging it, I have really understood the importance of writing clean, well-documented code from the beginning.
+
+Now I can beginning re-implementing terrain materials, and creating a fun, stable game using the terrain system I have built.
+
+Check back soon for more updates!
