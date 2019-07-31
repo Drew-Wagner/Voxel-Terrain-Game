@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Threading.Tasks;
+using System.Threading;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer), typeof(MeshCollider))]
 public class Chunk : MonoBehaviour
@@ -37,6 +38,8 @@ public class Chunk : MonoBehaviour
     static int numMaterials;
     static float scaler;
 
+    private CancellationTokenSource cancellationToken;
+
     private void Awake()
     {
         meshFilter = GetComponent<MeshFilter>();
@@ -61,9 +64,11 @@ public class Chunk : MonoBehaviour
         meshData.vertices = null;
         meshData.colors = null;
         meshData.triangles = null;
+        hasRequestMeshBuild = false;
+        cancellationToken.Cancel();
     }
 
-    public void Setup(Vector3Int coord, bool enableCollider, Material material)
+    public void Setup(Vector3Int coord, Material material)
     {
         this.coord = coord;
         this.chunkPosition = coord * (chunkSize-1);
@@ -75,7 +80,7 @@ public class Chunk : MonoBehaviour
             mesh = new Mesh();
         else
             mesh.Clear();
-        meshCollider.enabled = enableCollider;
+
         meshRenderer.material = material;
         numMaterials = 3;// material.GetInt("_TextureCount");
 
@@ -85,6 +90,8 @@ public class Chunk : MonoBehaviour
         lastMeshUpdateTime = -1;
         pointsHaveBeenGenerated = false;
         pointsHaveBeenModified = true;
+
+        cancellationToken = new CancellationTokenSource();
 
         GetMesh();
     }
@@ -298,22 +305,31 @@ public class Chunk : MonoBehaviour
         return meshData;
     }
 
+    private void OnApplicationQuit()
+    {
+        cancellationToken.Cancel();
+    }
+
     void GetMesh()
     {
         if (pointsHaveBeenModified && Time.time - lastMeshUpdateTime > 0.15f)
         {
             pointsHaveBeenModified = false;
+            CancellationToken token = cancellationToken.Token;
             Task<MeshData> task = Task.Run(() =>
             {
                 return GenerateChunk();
-            });
+            }, token);
             task.ContinueWith(prevTask =>
             {
-                meshData = prevTask.Result;
-                hasRequestMeshBuild = true;
-                //prevTask.Dispose();
-                ChunkManager.instance.EnqueueChunk(this);
-                lastMeshUpdateTime = Time.time;
+                if (!prevTask.IsCanceled)
+                {
+                    meshData = prevTask.Result;
+                    hasRequestMeshBuild = true;
+                    //prevTask.Dispose();
+                    ChunkManager.instance.EnqueueChunk(this);
+                    lastMeshUpdateTime = Time.time;
+                }
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
     }

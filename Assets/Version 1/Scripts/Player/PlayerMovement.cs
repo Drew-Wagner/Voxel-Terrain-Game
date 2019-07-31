@@ -13,10 +13,11 @@ public class PlayerMovement : MonoBehaviour
     public float jumpHeight = 3.0f;
     private bool grounded = false;
 
-
     new Rigidbody rigidbody;
 
     Animator animator;
+
+    float spawnTime;
 
     void Awake()
     {
@@ -26,6 +27,7 @@ public class PlayerMovement : MonoBehaviour
 
         animator = GetComponentInChildren<Animator>();
         transform.position = new Vector3(4, Chunk.GetHeightAtPoint(new Vector2(4,  4))+10, 4);
+        spawnTime = Time.time;
         //Chunk.seed = Random.value*1000000;
     }
 
@@ -58,10 +60,16 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // We apply gravity manually for more tuning control
-        if (Time.frameCount > 90)
+        if (Time.time - spawnTime > 5f)
             rigidbody.AddForce(new Vector3(0, -gravity * rigidbody.mass, 0));
 
         grounded = false;
+
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            transform.position = new Vector3(4, Chunk.GetHeightAtPoint(new Vector2(4, 4)) + 10, 4);
+            spawnTime = Time.time;
+        }
     }
 
     void OnCollisionStay()

@@ -9,7 +9,6 @@ public class ChunkManager : MonoBehaviour
     public Transform viewer;
     public GameObject chunkPrefab;
     public Material mat;
-    public bool generateColliders;
     public int chunkSize = 8;
     public int maxMeshBuildsPerFrame = 1;
     [HideInInspector]
@@ -18,6 +17,8 @@ public class ChunkManager : MonoBehaviour
     [HideInInspector]
     public float scaler;
 
+    bool firstLoad = true;
+
     private int chunksVisibleInViewDist;
     private int sqrViewDist;
     private int minSqrViewDist;
@@ -25,33 +26,26 @@ public class ChunkManager : MonoBehaviour
     List<Chunk> chunks;
     Dictionary<Vector3Int, Chunk> existingChunks;
     Queue<Chunk> recyclableChunks;
-    Queue<Chunk> chunkMeshesToBuild;
+    Stack<Chunk> chunkMeshesToBuild;
 
     Camera viewCamera;
 
+    float chunkSizeMinusOne;
+
     private void Start()
     {
-        //Texture2D[] textures = Resources.LoadAll<Texture2D>("Textures/Terrain Textures");
-        //Texture2DArray texture2DArray = new Texture2DArray(textures[0].width, textures[0].height, textures.Length, TextureFormat.RGB24, false, true);
-        //for (int i=0; i < textures.Length; i++)
-        //{
-        //    texture2DArray.SetPixels(textures[i].GetPixels(), i);
-        //    texture2DArray.Apply();
-        //}
-        //mat.SetTexture("_TerrainTextures", texture2DArray);
-        //mat.SetInt("_TextureCount", textures.Length);
-        //textures = null;
     }
     void Awake()
     {
         viewCamera = Camera.main;
 
+        chunkSizeMinusOne = chunkSize - 1;
         viewDist = Preferences.viewDist;
         instance = this;
         existingChunks = new Dictionary<Vector3Int, Chunk>();
         recyclableChunks = new Queue<Chunk>();
         chunks = new List<Chunk>();
-        chunkMeshesToBuild = new Queue<Chunk>();
+        chunkMeshesToBuild = new Stack<Chunk>();
         for (int i = transform.childCount - 1; i >= 0; i--)
         {
             DestroyImmediate(transform.GetChild(i).gameObject);
@@ -60,8 +54,9 @@ public class ChunkManager : MonoBehaviour
         sqrViewDist = viewDist * viewDist;
         minSqrViewDist = (chunkSize+1)*(chunkSize+1);
         scaler = scaling / (chunkSize / 16f);
-        RenderSettings.fogEndDistance = viewDist * 0.5f;
-
+        RenderSettings.fogEndDistance = viewDist * 0.6f;
+        RenderSettings.fogStartDistance = chunkSize;
+        firstLoad = true;
     }
 
     private void Update()
@@ -71,7 +66,7 @@ public class ChunkManager : MonoBehaviour
 
     public void EnqueueChunk(Chunk chunk)
     {
-        chunkMeshesToBuild.Enqueue(chunk);
+        chunkMeshesToBuild.Push(chunk);
     }
 
     void UpdateMeshOfChunk(Chunk chunk)
@@ -91,64 +86,68 @@ public class ChunkManager : MonoBehaviour
 
     void DequeueChunksAndHandleMeshData()
     {
-        Vector3 viewerPosition = viewer.position;
-        Vector3Int viewerCoord = new Vector3Int(Mathf.RoundToInt(viewerPosition.x / chunkSize), Mathf.RoundToInt(viewerPosition.y / chunkSize), Mathf.RoundToInt(viewerPosition.z / chunkSize));
-
+        Vector3 viewerPosition = viewer.transform.position;
+        Vector3Int viewerCoord = new Vector3Int(Mathf.RoundToInt(viewerPosition.x / chunkSizeMinusOne), Mathf.RoundToInt(viewerPosition.y / chunkSizeMinusOne), Mathf.RoundToInt(viewerPosition.z / chunkSizeMinusOne));
         int i = 0;
         if (existingChunks[viewerCoord].hasRequestMeshBuild)
         {
-            i = 1;
-            Chunk chunk = existingChunks[viewerCoord];
-            UpdateMeshOfChunk(chunk);
+            UpdateMeshOfChunk(existingChunks[viewerCoord]);
+            i++;
         }
         for (; chunkMeshesToBuild.Count > 0 && i < maxMeshBuildsPerFrame; i++) {
-            Chunk chunk = chunkMeshesToBuild.Dequeue();
+            Chunk chunk = chunkMeshesToBuild.Pop();
             if (chunk.hasRequestMeshBuild)
                 UpdateMeshOfChunk(chunk);
             else
                 i--;
         }
-        //System.GC.Collect();
+        System.GC.Collect();
+    }
+
+    void RecycleChunk(int i, Chunk chunk)
+    {
+        existingChunks.Remove(chunk.coord);
+        recyclableChunks.Enqueue(chunk);
+        chunks.RemoveAt(i);
+
+        chunk.DestroyOrDisable();
     }
 
     void UpdateVisibleChunks()
     {
-        Vector3 viewerPosition = viewer.position;
-        Vector3Int viewerCoord = new Vector3Int(Mathf.RoundToInt(viewerPosition.x / chunkSize), Mathf.RoundToInt(viewerPosition.y / chunkSize), Mathf.RoundToInt(viewerPosition.z / chunkSize));
+        Vector3 viewerPosition = viewer.transform.position;
+        Vector3Int viewerCoord = new Vector3Int(Mathf.RoundToInt(viewerPosition.x / chunkSizeMinusOne), Mathf.RoundToInt(viewerPosition.y / chunkSizeMinusOne), Mathf.RoundToInt(viewerPosition.z / chunkSizeMinusOne));
+
 
         for (int i = chunks.Count - 1; i >= 0; i--)
         {
             Chunk chunk = chunks[i];
             Vector3 centre = chunk.chunkPosition;
-            Vector3 offsetFromViewer = viewerPosition - centre;
-            Vector3 o = offsetFromViewer;//new Vector3(Mathf.Abs(offsetFromViewer.x), Mathf.Abs(offsetFromViewer.y), Mathf.Abs(offsetFromViewer.z)) - Vector3.one * chunkSize / 2;
-            float sqrDist = o.sqrMagnitude;//new Vector3(Mathf.Max(0, o.x), Mathf.Max(0, o.y), Mathf.Max(0, o.z)).sqrMagnitude;
+            Vector3 offsetFromViewer = centre-viewerPosition;
+            Vector3 o = new Vector3(Mathf.Abs(offsetFromViewer.x), Mathf.Abs(offsetFromViewer.y), Mathf.Abs(offsetFromViewer.z)) - Vector3.one * chunkSizeMinusOne / 2;
+            float sqrDist = new Vector3(Mathf.Max(0, o.x), Mathf.Max(0, o.y), Mathf.Max(0, o.z)).sqrMagnitude;
 
             if (sqrDist > sqrViewDist)
             {
-                chunk.DestroyOrDisable();
-                existingChunks.Remove(chunk.coord);
-                recyclableChunks.Enqueue(chunk);
-                chunks.RemoveAt(i);
+                RecycleChunk(i, chunk);
             }
         }
 
-
-
-        for (int i = 0; i <= chunksVisibleInViewDist * 2; i++)
+        int chunksVisibleInViewDistDoubled = chunksVisibleInViewDist * 2;
+        for (int i = chunksVisibleInViewDistDoubled; i >= 0; i--)
         {
             int y = i / 2;
-            if (i % 2 == 1) y *= -1;
+            if (i % 2 == 1) { if (y == 0) continue; y *= -1; }
 
-            for (int j = 0; j <= chunksVisibleInViewDist * 2; j++)
+            for (int j = chunksVisibleInViewDistDoubled; j >= 0; j--)
             {
                 int x = j / 2;
-                if (j % 2 == 1) x *= -1;
+                if (j % 2 == 1) { if (x == 0) continue; x *= -1; }
 
-                for (int k = 0; k <= chunksVisibleInViewDist * 2; k++)
+                for (int k = chunksVisibleInViewDistDoubled; k >= 0; k--)
                 {
                     int z = k / 2;
-                    if (k % 2 == 1) z *= -1;
+                    if (k % 2 == 1) { if (z == 0) continue; z *= -1; }
 
                     Vector3Int coord = new Vector3Int(x, y, z) + viewerCoord;
                     
@@ -157,33 +156,29 @@ public class ChunkManager : MonoBehaviour
                         continue;
                     }
 
-                    Vector3 centre = coord * chunkSize;
-                    Vector3 offsetFromViewer = viewerPosition - centre;
-                    Vector3 o = offsetFromViewer;// new Vector3(Mathf.Abs(offsetFromViewer.x), Mathf.Abs(offsetFromViewer.y), Mathf.Abs(offsetFromViewer.z)) - Vector3.one * chunkSize / 2;
-                    float sqrDist = o.sqrMagnitude;// new Vector3(Mathf.Max(0, o.x), Mathf.Max(0, o.y), Mathf.Max(0, o.z)).sqrMagnitude;
+                    Vector3 centre = new Vector3(coord.x, coord.y, coord.z) * chunkSizeMinusOne;
+                    Vector3 offsetFromViewer = centre-viewerPosition;
+                    Vector3 o = new Vector3(Mathf.Abs(offsetFromViewer.x), Mathf.Abs(offsetFromViewer.y), Mathf.Abs(offsetFromViewer.z)) - Vector3.one * chunkSizeMinusOne / 2;
+                    float sqrDist = new Vector3(Mathf.Max(0, o.x), Mathf.Max(0, o.y), Mathf.Max(0, o.z)).sqrMagnitude;
 
                     if (sqrDist < sqrViewDist)
                     {
-                        Bounds bounds = new Bounds(centre, Vector3.one * chunkSize);
-                        if (IsVisibleFrom(bounds, viewCamera) || sqrDist < minSqrViewDist)
+                        Bounds bounds = new Bounds(centre, Vector3.one * chunkSizeMinusOne);
+                        if (firstLoad || IsVisibleFrom(bounds, viewCamera) || sqrDist < minSqrViewDist)
                         {
                             if (recyclableChunks.Count > 0)
                             {
                                 Chunk chunk = recyclableChunks.Dequeue();
-                                chunk.Setup(coord, generateColliders, mat);
+                                chunk.Setup(coord, mat);
                                 existingChunks.Add(coord, chunk);
                                 chunks.Add(chunk);
-                                //if (sqrDist <= minSqrViewDist) chunk.SetColliderEnabled(true);
-                                //else chunk.SetColliderEnabled(false);
                             }
                             else
                             {
                                 Chunk chunk = CreateChunk();
-                                chunk.Setup(coord, generateColliders, mat);
+                                chunk.Setup(coord, mat);
                                 existingChunks.Add(coord, chunk);
                                 chunks.Add(chunk);
-                                //if (sqrDist <= minSqrViewDist) chunk.SetColliderEnabled(true);
-                                //else chunk.SetColliderEnabled(false);
                             }
                         }
                     }
@@ -191,6 +186,7 @@ public class ChunkManager : MonoBehaviour
             }
         }
         DequeueChunksAndHandleMeshData();
+        firstLoad = false;
     }
 
     bool IsVisibleFrom(Bounds bounds, Camera camera)
