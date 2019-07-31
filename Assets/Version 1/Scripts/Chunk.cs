@@ -35,7 +35,6 @@ public class Chunk : MonoBehaviour
     bool pointsHaveBeenModified = false;
     float lastMeshUpdateTime = -1;
 
-    static int numMaterials;
     static float scaler;
 
     private CancellationTokenSource cancellationToken;
@@ -82,7 +81,6 @@ public class Chunk : MonoBehaviour
             mesh.Clear();
 
         meshRenderer.material = material;
-        numMaterials = 3;// material.GetInt("_TextureCount");
 
         points = new Vector2[chunkSize * chunkSize * chunkSize];
         gameObject.SetActive(true);
@@ -157,20 +155,6 @@ public class Chunk : MonoBehaviour
     // point.w == global height, point.y == height normalized to multiple of chunk size
     public static Vector2 GenerateValueAtPoint(Vector4 point)
     {
-        
-
-        //float rawHeight = Perlin.Fbm(point.x / scaler, point.z / scaler, 4) + 0.5f;
-        //float height = Mathf.Pow(rawHeight, 2.7f) * 256f;
-
-        //float t = Mathf.Max(0, point.w - height);
-        //float caves = -Perlin.Fbm(point.x / (scaler), point.y / (scaler / 4), point.z / (scaler), 6) * 2f;
-
-        //float final = Mathf.Lerp(caves, Mathf.Abs(caves), t);
-        //final = Mathf.Clamp(final, -1, 1);
-
-        //int materialIndex = (int)(Mathf.Clamp01(Perlin.Noise(point.x/2f, point.y/2f, point.z/2f)) * numMaterials);
-
-        //return new Vector2(final, materialIndex);
         float localScaler = 0.75f*scaler + 2f*scaler * Perlin.Fbm(point.x, Preferences.seed*1.25f, point.z, 1);
         point.x /= localScaler;
         point.y /= localScaler;
@@ -186,9 +170,8 @@ public class Chunk : MonoBehaviour
         float caveBiomeMap = Mathf.Abs(1-Mathf.PerlinNoise(point.x, point.z));
         float caveToSurfaceFalloff = Mathf.Pow(Mathf.Clamp(heightMap * 1.5f - (point.w - heightMap * 0.5f), 0, heightMap) / heightMap, 2);
 
-        //float final = (overHang + baseNoise)-((1-overHang)*baseNoise);
         float final = Mathf.Lerp(baseNoise, overHang, caveBiomeMap*caveToSurfaceFalloff);
-        return new Vector2((1 - Mathf.Clamp01(final)) * 2 - 1f, (int)(Perlin.Fbm(point.x, point.y, point.z, 3)*numMaterials));
+        return new Vector2((1 - Mathf.Clamp01(final)) * 2 - 1f, 0);
     }
 
     public static float GetHeightAtPoint(Vector2 point)
@@ -251,8 +234,7 @@ public class Chunk : MonoBehaviour
                         tri.a = InterpolateVerts(cubeCorners[a0], cubeCorners[b0]);
                         tri.b = InterpolateVerts(cubeCorners[a1], cubeCorners[b1]);
                         tri.c = InterpolateVerts(cubeCorners[a2], cubeCorners[b2]);
-                        Color color = new Color(cubeCorners[a0].value.y, cubeCorners[a1].value.y, cubeCorners[a2].value.y)/(float)numMaterials;
-                        tri.color = color;
+                        tri.color = Color.white;
                         triangles.Add(tri);
                     }
                 }
@@ -312,7 +294,7 @@ public class Chunk : MonoBehaviour
 
     void GetMesh()
     {
-        if (pointsHaveBeenModified && Time.time - lastMeshUpdateTime > 0.15f)
+        if (pointsHaveBeenModified)
         {
             pointsHaveBeenModified = false;
             CancellationToken token = cancellationToken.Token;
