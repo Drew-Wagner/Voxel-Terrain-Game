@@ -40,8 +40,10 @@ public class RaycastManager : MonoBehaviour
             RaycastHit hit;
             if (Physics.Raycast(ray, out hit, 8))
             {
-                // FloorToInt(x+1) == CeilToInt(x), using Floor for consitency with rest of marching cube code
-                Vector3Int[] points = new Vector3Int[] {
+                if (hit.transform.gameObject.layer.Equals(LayerMask.NameToLayer("Terrain")))
+                {
+                    // FloorToInt(x+1) == CeilToInt(x), using Floor for consitency with rest of marching cube code
+                    Vector3Int[] points = new Vector3Int[] {
                     new Vector3Int(Mathf.FloorToInt(hit.point.x), Mathf.FloorToInt(hit.point.y), Mathf.FloorToInt(hit.point.z)),
                     new Vector3Int(Mathf.FloorToInt(hit.point.x+1), Mathf.FloorToInt(hit.point.y), Mathf.FloorToInt(hit.point.z)),
                     new Vector3Int(Mathf.FloorToInt(hit.point.x+1), Mathf.FloorToInt(hit.point.y), Mathf.FloorToInt(hit.point.z+1)),
@@ -52,17 +54,23 @@ public class RaycastManager : MonoBehaviour
                     new Vector3Int(Mathf.FloorToInt(hit.point.x), Mathf.FloorToInt(hit.point.y+1), Mathf.FloorToInt(hit.point.z+1)),
                     };
 
-                for (int i=0; i < 8; i++)
-                {
-                    List<Chunk> chunks = GetChunksFromPoint(points[i]);
-                    foreach (Chunk chunk in chunks)
+                    for (int i = 0; i < 8; i++)
                     {
-                        Vector3 localPoint = chunk.transform.InverseTransformPoint(points[i]);
-                        Vector3Int chunkPoint = new Vector3Int((int)localPoint.x, (int)localPoint.y, (int)localPoint.z);
+                        List<Chunk> chunks = GetChunksFromPoint(points[i]);
+                        foreach (Chunk chunk in chunks)
+                        {
+                            Vector3 localPoint = chunk.transform.InverseTransformPoint(points[i]);
+                            Vector3Int chunkPoint = new Vector3Int((int)localPoint.x, (int)localPoint.y, (int)localPoint.z);
 
-                        Vector2 v = chunk.GetValueAtPoint(chunkPoint);
-                        chunk.ModifyChunkAtPoint(chunkPoint, new Vector2(Mathf.Clamp(v.x + 1f * Time.deltaTime*(1-hit.distance/8f), -1, 1), v.y));
+                            Vector2 v = chunk.GetValueAtPoint(chunkPoint);
+                            chunk.ModifyChunkAtPoint(chunkPoint, new Vector2(Mathf.Clamp(v.x + 1f * Time.deltaTime * (1 - hit.distance / 8f), -1, 1), v.y));
+                        }
                     }
+                } else
+                {
+                    Debug.Log(hit.transform.gameObject.name);
+                    TreeGenerator tree = hit.transform.gameObject.GetComponentInParent<TreeGenerator>();
+                    tree.StartCoroutine("Shake");
                 }
             }
         } else if (Input.GetMouseButton(1))
@@ -71,8 +79,10 @@ public class RaycastManager : MonoBehaviour
             RaycastHit hit;
             if (Physics.Raycast(ray, out hit, 8))
             {
-                // FloorToInt(x+1) == CeilToInt(x), using Floor for consitency with rest of marching cube code
-                Vector3Int[] points = new Vector3Int[] {
+                if (hit.transform.gameObject.layer.Equals(LayerMask.NameToLayer("Terrain")))
+                {
+                    // FloorToInt(x+1) == CeilToInt(x), using Floor for consitency with rest of marching cube code
+                    Vector3Int[] points = new Vector3Int[] {
                     new Vector3Int(Mathf.FloorToInt(hit.point.x), Mathf.FloorToInt(hit.point.y), Mathf.FloorToInt(hit.point.z)),
                     new Vector3Int(Mathf.FloorToInt(hit.point.x+1), Mathf.FloorToInt(hit.point.y), Mathf.FloorToInt(hit.point.z)),
                     new Vector3Int(Mathf.FloorToInt(hit.point.x+1), Mathf.FloorToInt(hit.point.y), Mathf.FloorToInt(hit.point.z+1)),
@@ -83,16 +93,17 @@ public class RaycastManager : MonoBehaviour
                     new Vector3Int(Mathf.FloorToInt(hit.point.x), Mathf.FloorToInt(hit.point.y+1), Mathf.FloorToInt(hit.point.z+1)),
                     };
 
-                for (int i = 0; i < 8; i++)
-                {
-                    List<Chunk> chunks = GetChunksFromPoint(points[i]);
-                    foreach (Chunk chunk in chunks)
+                    for (int i = 0; i < 8; i++)
                     {
-                        Vector3 localPoint = chunk.transform.InverseTransformPoint(points[i]);
-                        Vector3Int chunkPoint = new Vector3Int((int)localPoint.x, (int)localPoint.y, (int)localPoint.z);
+                        List<Chunk> chunks = GetChunksFromPoint(points[i]);
+                        foreach (Chunk chunk in chunks)
+                        {
+                            Vector3 localPoint = chunk.transform.InverseTransformPoint(points[i]);
+                            Vector3Int chunkPoint = new Vector3Int((int)localPoint.x, (int)localPoint.y, (int)localPoint.z);
 
-                        float v = chunk.GetValueAtPoint(chunkPoint).x;
-                        chunk.ModifyChunkAtPoint(chunkPoint, new Vector2(Mathf.Clamp(v - 1f * Time.deltaTime * (1 - hit.distance / 8f), -1, 1), currentMaterial));
+                            float v = chunk.GetValueAtPoint(chunkPoint).x;
+                            chunk.ModifyChunkAtPoint(chunkPoint, new Vector2(Mathf.Clamp(v - 1f * Time.deltaTime * (1 - hit.distance / 8f), -1, 1), currentMaterial));
+                        }
                     }
                 }
             }

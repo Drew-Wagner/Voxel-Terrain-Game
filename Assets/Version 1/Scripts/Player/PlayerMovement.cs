@@ -72,9 +72,10 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    void OnCollisionStay()
+    void OnCollisionStay(Collision collision)
     {
-        grounded = true;
+        if (Vector3.Dot(collision.impulse.normalized, Vector3.up) > 0.25f)
+            grounded = true;
     }
 
     float CalculateJumpVerticalSpeed()

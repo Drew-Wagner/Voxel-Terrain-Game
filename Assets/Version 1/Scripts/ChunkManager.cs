@@ -55,7 +55,7 @@ public class ChunkManager : MonoBehaviour
         minSqrViewDist = (chunkSize+1)*(chunkSize+1);
         scaler = scaling / (chunkSize / 16f);
         RenderSettings.fogEndDistance = viewDist * 0.6f;
-        RenderSettings.fogStartDistance = chunkSize;
+        RenderSettings.fogStartDistance = chunkSize * 2f;
         firstLoad = true;
     }
 
@@ -81,6 +81,10 @@ public class ChunkManager : MonoBehaviour
 
         chunk.meshFilter.mesh = chunk.mesh;
         chunk.meshCollider.sharedMesh = chunk.mesh;
+
+        if (chunk.isInitialGeneration)
+            chunk.GetTrees();
+        chunk.isInitialGeneration = false;
         chunk.hasRequestMeshBuild = false;
     }
 

@@ -14,6 +14,8 @@ public class Chunk : MonoBehaviour
     int voxelsPerChunkSqr;
     float voxelsPerChunkAlmostOne;
 
+    public GameObject treePrefab;
+
     [HideInInspector]
     public Mesh mesh;
 
@@ -31,12 +33,17 @@ public class Chunk : MonoBehaviour
     [HideInInspector]
     public MeshData meshData;
     public bool hasRequestMeshBuild;
+    public bool isInitialGeneration;
 
     bool pointsHaveBeenModified = false;
+
+    public bool surfaceChunk = false;
 
     static float scaler;
 
     private CancellationTokenSource cancellationToken;
+
+    private List<GameObject> trees;
 
     private void Awake()
     {
@@ -58,6 +65,11 @@ public class Chunk : MonoBehaviour
         if (modifiedPoints.Count > 0)
         {
 
+        }
+
+        for (int i=transform.childCount-1; i >= 0; i--)
+        {
+            Destroy(transform.GetChild(i).gameObject);
         }
         mesh.Clear();
         modifiedPoints.Clear();
@@ -86,13 +98,16 @@ public class Chunk : MonoBehaviour
         meshRenderer.material = material;
 
         points = new Vector2[chunkSize * chunkSize * chunkSize];
+
+        trees = new List<GameObject>();
         gameObject.SetActive(true);
 
         pointsHaveBeenGenerated = false;
         pointsHaveBeenModified = true;
 
         cancellationToken = new CancellationTokenSource();
-
+        isInitialGeneration = true;
+        surfaceChunk = false;
         GetMesh();
     }
 
@@ -314,6 +329,59 @@ public class Chunk : MonoBehaviour
                     ChunkManager.instance.EnqueueChunk(this);
                 }
             }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+    }
+
+    public void TestIsSurfaceChunk()
+    {
+        if (mesh.vertexCount == 0)
+        {
+            return;
+        }
+        bool flag = false;
+        for (int i = 0; i < chunkSize; i++)
+        {
+            for (int j = 0; j < chunkSize; j++)
+            {
+                RaycastHit hit;
+                Vector3 origin = new Vector3(i, 0, j);
+                origin = transform.TransformPoint(origin);
+                origin.y = Preferences.maxTerrainHeight + 10;
+                if (Physics.Raycast(new Ray(origin, Vector3.down), out hit, Preferences.maxTerrainHeight + 10) && hit.transform.gameObject.Equals(gameObject))
+                {
+                    surfaceChunk = true;
+                    break;
+                }
+            }
+            if (flag) break;
+        }
+    }
+
+    public void GetTrees()
+    {
+        TestIsSurfaceChunk();
+        if (surfaceChunk)
+        {
+            Physics.queriesHitBackfaces = true;
+            float v = Mathf.PerlinNoise(coord.x * voxelsPerChunkAlmostOne, coord.z * voxelsPerChunkAlmostOne);
+            if (v > 0.3f)
+            {
+                int treeCount = (int)(Random.value * 8 * v);
+                for (int i = 0; i < treeCount; i++)
+                {
+                    Vector3 coords = new Vector3(Random.value * chunkSize, chunkSize, Random.value * chunkSize);
+                    RaycastHit hit;
+                    if (Physics.Raycast(new Ray(transform.TransformPoint(coords), Vector3.down), out hit, chunkSize) && hit.transform.gameObject.layer.Equals(LayerMask.NameToLayer("Terrain")))
+                    {
+                        if (Vector3.Dot(Vector3.down, hit.normal) < -0.75f)
+                        {
+                            GameObject newTree = GameObject.Instantiate(treePrefab, transform);
+                            newTree.transform.position = hit.point + Vector3.down * 0.075f;
+                        }
+                    }
+                }
+                Physics.queriesHitBackfaces = false;
+            }
         }
     }
 

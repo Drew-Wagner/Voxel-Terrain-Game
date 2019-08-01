@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 8380624662610423321}
   - component: {fileID: 4113124078677334298}
   - component: {fileID: 3589590800186612885}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: ChunkPrefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -107,4 +107,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   coord: {x: 0, y: 0, z: 0}
   chunkPosition: {x: 0, y: 0, z: 0}
+  bounds:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 0, y: 0, z: 0}
+  treePrefab: {fileID: 6570550861934550006, guid: a46ad3eb33ce1d648b7fc7343b2fe353,
+    type: 3}
   mesh: {fileID: 0}
+  meshFilter: {fileID: 0}
+  meshRenderer: {fileID: 0}
+  meshCollider: {fileID: 0}
+  hasRequestMeshBuild: 0
+  isInitialGeneration: 0
