@@ -12,6 +12,7 @@ public class GameManager : MonoBehaviour
     public static GameManager instance;
 
     public Text debugInfo;
+    public Image crosshairs;
 
     Camera mainCamera;
 
@@ -41,6 +42,11 @@ public class GameManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F1))
         {
             debugInfo.gameObject.SetActive(!debugInfo.gameObject.activeSelf);
+        }
+
+        if (Input.GetKeyDown(KeyCode.F2))
+        {
+            crosshairs.gameObject.SetActive(!crosshairs.gameObject.activeSelf);
         }
 
         // Updates debug info information every 15 frames

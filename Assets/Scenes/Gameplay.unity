@@ -15,15 +15,15 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 9
   m_Fog: 1
-  m_FogColor: {r: 1, g: 0.5803922, b: 0.49803922, a: 1}
+  m_FogColor: {r: 0.42352945, g: 0.8980393, b: 0.8313726, a: 1}
   m_FogMode: 1
   m_FogDensity: 0.02
   m_LinearFogStart: 0
   m_LinearFogEnd: 64
-  m_AmbientSkyColor: {r: 0.13696806, g: 0.3694952, b: 0.40771887, a: 1}
+  m_AmbientSkyColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
-  m_AmbientIntensity: 0.8
+  m_AmbientIntensity: 0.5
   m_AmbientMode: 3
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
   m_SkyboxMaterial: {fileID: 2100000, guid: 6a8804d8351462646a500ac2a83eb067, type: 2}
@@ -389,7 +389,7 @@ GameObject:
   - component: {fileID: 598829793}
   - component: {fileID: 598829792}
   m_Layer: 5
-  m_Name: Image
+  m_Name: Crosshairs
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -525,7 +525,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 0, y: 2.7191764e+16, z: 6.07e-43, w: 3.784227e+16}
+  m_BoundingSphereOverride: {x: 4.542494e+30, y: 1.8523599e+28, z: 230887940, w: 4.5448167e+30}
   m_UseBoundingSphereOverride: 0
   m_ShadowRadius: 0
   m_ShadowAngle: 0
@@ -654,7 +654,7 @@ RectTransform:
   m_Children:
   - {fileID: 421378763}
   m_Father: {fileID: 1701973438}
-  m_RootOrder: 3
+  m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
@@ -674,7 +674,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 0.7843138, b: 0.7137255, a: 1}
+  m_Color: {r: 0.49803925, g: 0.9960785, b: 0.8313726, a: 1}
   m_RaycastTarget: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
@@ -739,7 +739,8 @@ RectTransform:
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
-  m_Children: []
+  m_Children:
+  - {fileID: 1713968575}
   m_Father: {fileID: 1701973438}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -803,7 +804,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1156917998}
-  - component: {fileID: 1156917997}
   - component: {fileID: 1156917999}
   m_Layer: 0
   m_Name: GameManager
@@ -812,19 +812,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1156917997
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1156917996}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe814700a21ac224db641f5cc3d0c9ad, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  sun: {fileID: 0}
 --- !u!4 &1156917998
 Transform:
   m_ObjectHideFlags: 0
@@ -852,8 +839,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   debugInfo: {fileID: 1090487232}
-  sun: {fileID: 705507994}
-  waterLevel: 0
+  crosshairs: {fileID: 598829792}
 --- !u!1 &1350114795
 GameObject:
   m_ObjectHideFlags: 0
@@ -939,7 +925,6 @@ MonoBehaviour:
   maxMeshBuildsPerFrame: 8
   viewDist: 48
   scaling: 4
-  scaler: 0
 --- !u!4 &1378874939
 Transform:
   m_ObjectHideFlags: 0
@@ -1321,7 +1306,6 @@ RectTransform:
   m_Children:
   - {fileID: 1090487231}
   - {fileID: 598829791}
-  - {fileID: 1713968575}
   - {fileID: 890707819}
   m_Father: {fileID: 0}
   m_RootOrder: 5
@@ -1356,16 +1340,16 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1713968574}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
-  m_Father: {fileID: 1701973438}
-  m_RootOrder: 2
+  m_Father: {fileID: 1090487231}
+  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
-  m_AnchoredPosition: {x: 0, y: -20}
+  m_AnchoredPosition: {x: 310, y: 155.02818}
   m_SizeDelta: {x: 500, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1713968576
