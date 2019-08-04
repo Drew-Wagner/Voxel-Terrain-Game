@@ -77,10 +77,11 @@ public class Chunk : MonoBehaviour
         // TODO Here is where we will save the chunk before unloading it.
 
         // Destroy all the entities attached to the Chunk
-        for (int i=entities.Count-1; i >= 0; i--)
+        for (int i = entities.Count - 1; i >= 0; i--)
         {
-            Destroy(entities[i]);
+            DestroyImmediate(entities[i]);
         }
+        entities.Clear();
 
         // Free up some memory
         mesh.Clear();
@@ -374,15 +375,15 @@ public class Chunk : MonoBehaviour
                 int treeCount = (int)(Random.value * 8 * v);
                 for (int i = 0; i < treeCount; i++)
                 {
-                    Vector3 coords = new Vector3(Random.value * chunkSize, chunkSize, Random.value * chunkSize);
+                    Vector3 coords = new Vector3(Random.value * chunkSize, chunkSize -1, Random.value * chunkSize);
                     RaycastHit hit;
-                    if (Physics.Raycast(new Ray(transform.TransformPoint(coords), Vector3.down), out hit, chunkSize) && hit.transform.gameObject.layer.Equals(LayerMask.NameToLayer("Terrain")))
-                    {
+                    if (Physics.Raycast(new Ray(transform.TransformPoint(coords), Vector3.down), out hit, chunkSize-1f) && hit.transform.gameObject == gameObject) {
                         // If point is flat, and facing upwards, add a tree.
                         if (Vector3.Dot(Vector3.down, hit.normal) < -0.75f)
                         {
                             GameObject newTree = GameObject.Instantiate(treePrefab, transform);
                             newTree.transform.position = hit.point + Vector3.down * 0.075f;
+                            entities.Add(newTree);
                         }
                     }
                 }
@@ -404,6 +405,7 @@ public class Chunk : MonoBehaviour
             surfaceChunk = false;
             return;
         }
+        surfaceChunk = false;
         for (int i = 0; i < chunkSize; i++)
         {
             for (int j = 0; j < chunkSize; j++)
@@ -411,8 +413,8 @@ public class Chunk : MonoBehaviour
                 RaycastHit hit;
                 Vector3 origin = new Vector3(i, 0, j);
                 origin = transform.TransformPoint(origin);
-                origin.y = Preferences.maxTerrainHeight + 10;
-                if (Physics.Raycast(new Ray(origin, Vector3.down), out hit, Preferences.maxTerrainHeight + 10) && hit.transform.gameObject.Equals(gameObject))
+                origin.y = Preferences.maxTerrainHeight;
+                if (Physics.Raycast(new Ray(origin, Vector3.down), out hit, Preferences.maxTerrainHeight*2f) && hit.transform.gameObject == gameObject)
                 {
                     surfaceChunk = true;
                     break;

@@ -244,8 +244,14 @@ public class ChunkManager : MonoBehaviour
 
         // Assigns the mesh to the meshFilter and meshCollider to update it.
         chunk.meshFilter.mesh = chunk.mesh;
-        chunk.meshCollider.sharedMesh = chunk.mesh;
-
+        if (chunk.mesh.vertexCount > 0)
+        {
+            chunk.meshCollider.sharedMesh = chunk.mesh;
+            chunk.meshCollider.enabled = true;
+        } else
+        {
+            chunk.meshCollider.enabled = false;
+        }
         // Tells the Chunk to generate trees, if it has been created for the first time.
         if (chunk.isInitialGeneration)
             chunk.GenerateTrees();
