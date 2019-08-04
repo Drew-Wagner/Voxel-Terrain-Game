@@ -2,24 +2,52 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Represents a Tree on the terrain. Handles procedural generation of
+/// a new tree, as well as interaction with the player.
+/// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class TerrainTree : MonoBehaviour
 {
-    public Transform trunk;
-    public Transform leaves;
+    /// <summary>
+    /// The transform representing the trunk of the tree.
+    /// </summary>
+    [SerializeField]
+    private Transform trunk;
+    /// <summary>
+    /// The transform representing the leaves of the tree.
+    /// </summary>
+    [SerializeField]
+    private Transform leaves;
+
+    /// <summary>
+    /// The rigidbody attached to the tree.
+    /// </summary>
     Rigidbody rigidbody;
 
+    /// <summary>
+    /// Is the Shake coroutine running
+    /// </summary>
     bool isShaking;
 
+    /// <summary>
+    /// How much more damage the tree can take before
+    /// falling over.
+    /// </summary>
     int health;
 
+    /// <summary>
+    /// Marks if the tree has been uprooted already.
+    /// </summary>
     bool upRooted;
 
-    // Start is called before the first frame update
     private void Awake()
     {
+        // Get the Rigidbody attached to the tree
         rigidbody = GetComponent<Rigidbody>();
-        Vector2 point = new Vector3(transform.position.x, transform.position.z) / ChunkManager.instance.scaler;
+
+        // Procedurally generate the sizes of trunk, and leaves using Perlin noise and the trees global position.
+        Vector2 point = new Vector3(transform.position.x, transform.position.z) / Preferences.terrainScaler;
         float trunkHeight = 1f + Mathf.PerlinNoise(point.x, point.y) * 5.5f;
         float leavesRadius = 1f + Mathf.PerlinNoise(point.x + 1.5f, point.y) * 5f;
         float leavesHeight = 0.3f + Mathf.PerlinNoise(point.x, point.y + 1.5f) * 4.7f;
@@ -29,9 +57,14 @@ public class TerrainTree : MonoBehaviour
         leaves.localScale = new Vector3(leavesRadius, leavesHeight, leavesRadius);
         leaves.localPosition = new Vector3(0, trunkHeight + leavesHeight / 2f, 0);
 
+        // Set the damage the tree can take according to its size
         health = (int)(trunkHeight * trunkRadius / 2f + 1f);
     }
 
+    /// <summary>
+    /// A coroutine to physically shake the tree when the player hits it.
+    /// </summary>
+    /// <returns></returns>
     IEnumerator Shake()
     {
         if (isShaking || upRooted)
@@ -51,13 +84,21 @@ public class TerrainTree : MonoBehaviour
         transform.localRotation = Quaternion.identity;
         if (health <= 0)
         {
-            upRooted = true;
-            rigidbody.isKinematic = false;
-            rigidbody.AddForce(Vector3.up*2);
-            rigidbody.AddTorque(Random.onUnitSphere*2);
-            Destroy(leaves.gameObject);
+            UprootTree();
         }
         isShaking = false;
         yield break;
+    }
+
+    /// <summary>
+    /// Causes the tree to fallover, and destroys the leaves.
+    /// </summary>
+    void UprootTree()
+    {
+        upRooted = true;
+        rigidbody.isKinematic = false;
+        rigidbody.AddForce(Vector3.up * 2);
+        rigidbody.AddTorque(Random.onUnitSphere * 2);
+        Destroy(leaves.gameObject);
     }
 }
