@@ -401,6 +401,7 @@ public class Chunk : MonoBehaviour
     {
         if (mesh.vertexCount == 0)
         {
+            surfaceChunk = false;
             return;
         }
         for (int i = 0; i < chunkSize; i++)
