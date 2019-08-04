@@ -83,7 +83,7 @@ public class ChunkManager : MonoBehaviour
         chunk.meshCollider.sharedMesh = chunk.mesh;
 
         if (chunk.isInitialGeneration)
-            chunk.GetTrees();
+            chunk.GenerateTrees();
         chunk.isInitialGeneration = false;
         chunk.hasRequestMeshBuild = false;
     }

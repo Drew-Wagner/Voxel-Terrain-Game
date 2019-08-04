@@ -4,6 +4,11 @@ using UnityEngine;
 using System.Threading.Tasks;
 using System.Threading;
 
+/// <summary>
+/// Class <c>Chunk</c> creates and stores density points, as well as MeshData
+/// representing a chunk of terrain. Chunks are recycled when they go out of
+/// view, instead of being destroyed.
+/// </summary>
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer), typeof(MeshCollider))]
 public class Chunk : MonoBehaviour
 {
@@ -39,49 +44,62 @@ public class Chunk : MonoBehaviour
 
     public bool surfaceChunk = false;
 
-    static float scaler;
-
     private CancellationTokenSource cancellationToken;
 
-    private List<GameObject> trees;
+    private List<GameObject> entities;
 
+    /// <summary>
+    /// Gets the components of a chunk when the GameObject is first created.
+    /// </summary>
     private void Awake()
     {
+        // Gets the MeshFilter, MeshRendered and MeshCollider attached to the Chunk.
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
         meshCollider = GetComponent<MeshCollider>();
 
+        // Caches some useful values
         chunkSize = ChunkManager.instance.chunkSize;
         voxelsPerChunkSqr = chunkSize * chunkSize; 
         voxelsPerChunkAlmostOne = (chunkSize-1)/(float)chunkSize;
-
-        scaler = ChunkManager.instance.scaler;
     }
 
+
+    /// <summary>
+    /// The method <c>DestroyOrDisable</c> prepares a <c>Chunk</c> to be recycled by the
+    /// <c>ChunkManager</c>
+    /// </summary>
     public void DestroyOrDisable()
     {
+        // Disable the GameObject
         gameObject.SetActive(false);
-        // Here is where we will save the chunk before unloading it.
-        if (modifiedPoints.Count > 0)
-        {
 
+        // TODO Here is where we will save the chunk before unloading it.
+
+        // Destroy all the entities attached to the Chunk
+        for (int i=entities.Count-1; i >= 0; i--)
+        {
+            Destroy(entities[i]);
         }
 
-        for (int i=transform.childCount-1; i >= 0; i--)
-        {
-            Destroy(transform.GetChild(i).gameObject);
-        }
+        // Free up some memory
         mesh.Clear();
         modifiedPoints.Clear();
         points = null;
-        pointsHaveBeenGenerated = false;
         meshData.vertices = null;
         meshData.colors = null;
         meshData.triangles = null;
         hasRequestMeshBuild = false;
+
+        // If a GenerateChunk task is running, cancel it.
         cancellationToken.Cancel();
     }
 
+    /// <summary>
+    /// Called by <c>ChunkManager</c> to setup a chunk, either new or recycled.
+    /// </summary>
+    /// <param name="coord">The chunk coordinate</param>
+    /// <param name="material">The material to be assigned to this <c>Chunk</c>'s MeshRenderer</param>
     public void Setup(Vector3Int coord, Material material)
     {
         this.coord = coord;
@@ -99,25 +117,177 @@ public class Chunk : MonoBehaviour
 
         points = new Vector2[chunkSize * chunkSize * chunkSize];
 
-        trees = new List<GameObject>();
+        entities = new List<GameObject>();
         gameObject.SetActive(true);
 
         pointsHaveBeenGenerated = false;
         pointsHaveBeenModified = true;
 
+        // Create a new CancellationTokenSource, to be used by the GenerateChunk task
         cancellationToken = new CancellationTokenSource();
+
         isInitialGeneration = true;
         surfaceChunk = false;
+
+        // Begin the process of constructing a mesh
         GetMesh();
     }
 
-    public bool ContainsPoint(Vector3 point)
+
+    /// <summary>
+    /// Begin a new Task to prepare the MeshData for the chunk,
+    /// then call BuildMesh from the main thread upon completion.
+    /// </summary>
+    void GetMesh()
     {
-        return chunkPosition.x <= point.x && point.x < chunkPosition.x + chunkSize
-            && chunkPosition.y <= point.y && point.y < chunkPosition.y +  chunkSize
-            && chunkPosition.z <= point.z && point.z < chunkPosition.z + chunkSize;
+        if (pointsHaveBeenModified)
+        {
+            pointsHaveBeenModified = false;
+            CancellationToken token = cancellationToken.Token;
+            Task<MeshData> task = Task.Run(() =>
+            {
+                return GenerateChunk();
+            }, token);
+            // Once the Task completes, if it has not been cancelled,
+            // call BuildMesh from the main thread.
+            task.ContinueWith(prevTask =>
+            {
+                if (!prevTask.IsCanceled)
+                {
+                    meshData = prevTask.Result;
+                    hasRequestMeshBuild = true;
+                    //prevTask.Dispose();
+                    if (meshData.vertices.Length > 0)
+                    {
+                        ChunkManager.instance.EnqueueChunk(this);
+                    }
+                }
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
     }
 
+    /// <summary>
+    /// Runs on a worker thread. This method applies the Marching Cubes algorithm to
+    /// extract a surface with an ISO value of 0 (Values range between -1 and +1).
+    /// </summary>
+    /// <returns>Returns prepared MeshData.</returns>
+    MeshData GenerateChunk()
+    {
+        // If points have not yet been generated, then generate them.
+        if (!pointsHaveBeenGenerated)
+        {
+            GetPoints();
+            pointsHaveBeenGenerated = true;
+        }
+
+        // A list to store the Triangles
+        List<Triangle> triangles = new List<Triangle>();
+
+        // March through the 3D density values grid.
+        int voxelsPerAxis = chunkSize - 1;
+        for (int z = 0; z < voxelsPerAxis; z++)
+        {
+            for (int y = 0; y < voxelsPerAxis; y++)
+            {
+                for (int x = 0; x < voxelsPerAxis; x++)
+                {
+                    // Get the vertices and values at the 8 corners of the cube.
+                    CubeCorner[] cubeCorners =
+                    {
+                            GetCubeCorner(x, y, z),
+                            GetCubeCorner(x+1, y, z),
+                            GetCubeCorner(x+1, y, z+1),
+                            GetCubeCorner(x, y, z+1),
+                            GetCubeCorner(x, y+1, z),
+                            GetCubeCorner(x+1, y+1, z),
+                            GetCubeCorner(x+1, y+1, z+1),
+                            GetCubeCorner(x, y+1, z+1)
+                        };
+
+                    // Calculate the configuration number (256 possibilities)
+                    int configNumber = 0;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        if (cubeCorners[i].value.x < 0)
+                        {
+                            configNumber |= (int)Mathf.Pow(2, i);
+                        }
+                    }
+
+                    // Add triangles according to the predefined triangulation for the specified configuration
+                    for (int i = 0; triangulation[configNumber][i] != -1; i += 3)
+                    {
+                        int a0 = cornerIndexAFromEdge[triangulation[configNumber][i]];
+                        int b0 = cornerIndexBFromEdge[triangulation[configNumber][i]];
+
+                        int a1 = cornerIndexAFromEdge[triangulation[configNumber][i + 1]];
+                        int b1 = cornerIndexBFromEdge[triangulation[configNumber][i + 1]];
+
+                        int a2 = cornerIndexAFromEdge[triangulation[configNumber][i + 2]];
+                        int b2 = cornerIndexBFromEdge[triangulation[configNumber][i + 2]];
+
+                        Triangle tri;
+                        tri.a = InterpolateVerts(cubeCorners[a0], cubeCorners[b0]);
+                        tri.b = InterpolateVerts(cubeCorners[a1], cubeCorners[b1]);
+                        tri.c = InterpolateVerts(cubeCorners[a2], cubeCorners[b2]);
+                        tri.color = Color.white;
+                        triangles.Add(tri);
+                    }
+                }
+            }
+        }
+
+        // Prepare MeshData from the triangles List
+
+        int triangleCount = triangles.Count;
+
+
+        List<Vector3> vertices = new List<Vector3>();
+        List<Color> colors = new List<Color>();
+        int[] tris = new int[triangleCount * 3];
+
+        //// Smooth shading
+        //Dictionary<Vector3, int> vertexToIndex = new Dictionary<Vector3, int>();
+
+
+        for (int i = 0; i < triangleCount; i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                ////Smooth shading
+                //Vector3 vertex = triangles[i][j];
+                //Color color = triangles[i].color;
+                //if (vertexToIndex.ContainsKey(vertex))
+                //{
+                //    tris[i * 3 + j] = vertexToIndex[vertex];
+                //} else
+                //{
+                //    vertices.Add(vertex);
+                //    colors.Add(color);
+                //    int index = vertexToIndex.Count;
+                //    vertexToIndex.Add(vertex, index);
+                //    tris[i * 3 + j] = index;
+                //}
+
+                // Flat shading
+                tris[i * 3 + j] = i * 3 + j;
+                vertices.Add(triangles[i][j]);
+                colors.Add(triangles[i].color);
+            }
+        }
+
+        MeshData meshData;
+        meshData.vertices = vertices.ToArray();
+        meshData.colors = colors.ToArray();
+        meshData.triangles = tris;
+
+        return meshData;
+    }
+
+    /// <summary>
+    /// Gets the initial points for this <c>Chunk</c>, if the point is in <c>modifiedPoints</c>
+    /// then that value will be used, otherwise the value is generated with Perlin noise.
+    /// </summary>
     void GetPoints()
     {
         for (int z = 0; z < chunkSize; z++)
@@ -147,13 +317,141 @@ public class Chunk : MonoBehaviour
         }
     }
 
-    // TODO: Method needs Vector3
+    /// <summary>
+    /// Uses layers Perlin noise to generate the density value at a specific point.
+    /// </summary>
+    /// <param name="point">
+    /// point.x, point.y, point.z represent the position of the point in multiples of <c>chunkSize</c>.
+    /// point.w represents the y value of the point in global coordinates.</param>
+    /// <returns></returns>
+    public static Vector2 GenerateValueAtPoint(Vector4 point)
+    {
+        // TODO Explain this code
+        float localScaler = 0.75f * Preferences.terrainScaler + 2f * Preferences.terrainScaler * Perlin.Fbm(point.x, Preferences.seed * 1.25f, point.z, 1);
+        point.x /= localScaler;
+        point.y /= localScaler;
+        point.z /= localScaler;
+
+        float baseNoise = 1;
+        float heightMap = GetHeightAtPoint(new Vector2(point.x, point.z));
+        baseNoise *= 1 - Mathf.Clamp01(point.w - heightMap);
+        baseNoise *= 1 - point.w / Preferences.maxTerrainHeight;
+        baseNoise = Mathf.Clamp01(baseNoise);
+
+        float overHang = Perlin.Fbm(point.x * 4f, point.y * 4f, point.z * 4f, 1);
+        float caveBiomeMap = Mathf.Abs(1 - Mathf.PerlinNoise(point.x, point.z));
+        float caveToSurfaceFalloff = Mathf.Pow(Mathf.Clamp(heightMap * 1.5f - (point.w - heightMap * 0.5f), 0, heightMap) / heightMap, 2);
+
+        float final = Mathf.Lerp(baseNoise, overHang, caveBiomeMap * caveToSurfaceFalloff);
+        return new Vector2((1 - Mathf.Clamp01(final)) * 2 - 1f, 0);
+    }
+
+    /// <summary>
+    /// Get the base height of the terrain at a specified point. Not very accurate, because the base height is affected by caves.
+    /// </summary>
+    /// <param name="point"></param>
+    /// <returns></returns>
+    public static float GetHeightAtPoint(Vector2 point)
+    {
+        float maxLocalHeight = Perlin.Fbm(point.x / 2f, Preferences.seed + 0.5f * Preferences.seed, point.x / 2f, 1) * Preferences.maxTerrainHeight;
+        float localFadeExponent = Mathf.Max(1, Perlin.Fbm(point.x / 2f, Preferences.seed + 1.5f, point.x / 2f, 1) * 5f);
+        float heightMap = Mathf.Clamp01(Mathf.Pow(Perlin.Fbm(point.x, Preferences.seed, point.x, 3), localFadeExponent) + Perlin.Fbm(point.x / 4f, Preferences.seed * 1.75f, point.x / 4f, 1) * 0.8f) * maxLocalHeight;
+        return heightMap;
+    }
+
+    /// <summary>
+    /// Method <c>GenerateTrees</c> is called after the initial chunk generation. Places procedurally generated trees
+    /// at randomly chosen flat points on the terrain.
+    /// </summary>
+    public void GenerateTrees()
+    {
+        TestIsSurfaceChunk();
+        if (surfaceChunk)
+        {
+            // We enable this so that we can place trees only on parts of the chunk that are open to the sky (In theory)
+            Physics.queriesHitBackfaces = true;
+            float v = Mathf.PerlinNoise(coord.x * voxelsPerChunkAlmostOne, coord.z * voxelsPerChunkAlmostOne);
+            if (v > 0.3f)
+            {
+                int treeCount = (int)(Random.value * 8 * v);
+                for (int i = 0; i < treeCount; i++)
+                {
+                    Vector3 coords = new Vector3(Random.value * chunkSize, chunkSize, Random.value * chunkSize);
+                    RaycastHit hit;
+                    if (Physics.Raycast(new Ray(transform.TransformPoint(coords), Vector3.down), out hit, chunkSize) && hit.transform.gameObject.layer.Equals(LayerMask.NameToLayer("Terrain")))
+                    {
+                        // If point is flat, and facing upwards, add a tree.
+                        if (Vector3.Dot(Vector3.down, hit.normal) < -0.75f)
+                        {
+                            GameObject newTree = GameObject.Instantiate(treePrefab, transform);
+                            newTree.transform.position = hit.point + Vector3.down * 0.075f;
+                        }
+                    }
+                }
+                // Disable for normal operation
+                Physics.queriesHitBackfaces = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Raycasts downwards from the maximum terrain height, to each integer point on the xz-plane
+    /// of the chunk. If the ray hits this chunk, then it is a surface chunk. The loop breaks after
+    /// one Raycast hits the chunk.
+    /// </summary>
+    public void TestIsSurfaceChunk()
+    {
+        if (mesh.vertexCount == 0)
+        {
+            return;
+        }
+        for (int i = 0; i < chunkSize; i++)
+        {
+            for (int j = 0; j < chunkSize; j++)
+            {
+                RaycastHit hit;
+                Vector3 origin = new Vector3(i, 0, j);
+                origin = transform.TransformPoint(origin);
+                origin.y = Preferences.maxTerrainHeight + 10;
+                if (Physics.Raycast(new Ray(origin, Vector3.down), out hit, Preferences.maxTerrainHeight + 10) && hit.transform.gameObject.Equals(gameObject))
+                {
+                    surfaceChunk = true;
+                    break;
+                }
+            }
+            if (surfaceChunk) break;
+        }
+    }
+
+    /// <summary>
+    /// Check's to see if a point is in this <c>Chunk</c>.
+    /// </summary>
+    /// <param name="point"></param>
+    /// <returns></returns>
+    public bool ContainsPoint(Vector3 point)
+    {
+        return chunkPosition.x <= point.x && point.x < chunkPosition.x + chunkSize
+            && chunkPosition.y <= point.y && point.y < chunkPosition.y +  chunkSize
+            && chunkPosition.z <= point.z && point.z < chunkPosition.z + chunkSize;
+    }
+
+    /// <summary>
+    /// Returns the density value at a given point.
+    /// </summary>
+    /// <param name="point"></param>
+    /// <returns></returns>
     public Vector2 GetValueAtPoint(Vector3Int point)
     {
         point.Clamp(Vector3Int.zero, Vector3Int.one * chunkSize);
         return points[point.z * voxelsPerChunkSqr + point.y * chunkSize + point.x];
     }
 
+    /// <summary>
+    /// Modifies the density value at the specified point, and notifies the <c>Chunk</c>
+    /// that its points have been updated.
+    /// </summary>
+    /// <param name="point"></param>
+    /// <param name="value"></param>
     public void ModifyChunkAtPoint(Vector3Int point, Vector2 value)
     {
         point.Clamp(Vector3Int.zero, Vector3Int.one * chunkSize);
@@ -169,231 +467,26 @@ public class Chunk : MonoBehaviour
         NotifyPointsUpdate();
     }
 
-    // point.w == global height, point.y == height normalized to multiple of chunk size
-    public static Vector2 GenerateValueAtPoint(Vector4 point)
-    {
-        float localScaler = 0.75f*scaler + 2f*scaler * Perlin.Fbm(point.x, Preferences.seed*1.25f, point.z, 1);
-        point.x /= localScaler;
-        point.y /= localScaler;
-        point.z /= localScaler;
-
-        float baseNoise = 1;
-        float heightMap = GetHeightAtPoint(new Vector2(point.x, point.z));
-        baseNoise *= 1-Mathf.Clamp01(point.w - heightMap);
-        baseNoise *= 1-point.w / Preferences.maxTerrainHeight;
-        baseNoise = Mathf.Clamp01(baseNoise);
-
-        float overHang = Perlin.Fbm(point.x*4f, point.y*4f, point.z*4f, 1);
-        float caveBiomeMap = Mathf.Abs(1-Mathf.PerlinNoise(point.x, point.z));
-        float caveToSurfaceFalloff = Mathf.Pow(Mathf.Clamp(heightMap * 1.5f - (point.w - heightMap * 0.5f), 0, heightMap) / heightMap, 2);
-
-        float final = Mathf.Lerp(baseNoise, overHang, caveBiomeMap*caveToSurfaceFalloff);
-        return new Vector2((1 - Mathf.Clamp01(final)) * 2 - 1f, 0);
-    }
-
-    public static float GetHeightAtPoint(Vector2 point)
-    {
-        float maxLocalHeight = Perlin.Fbm(point.x / 2f, Preferences.seed + 0.5f * Preferences.seed, point.x / 2f, 1) * Preferences.maxTerrainHeight;
-        float localFadeExponent = Mathf.Max(1, Perlin.Fbm(point.x / 2f, Preferences.seed + 1.5f, point.x / 2f, 1) * 5f);
-        float heightMap = Mathf.Clamp01(Mathf.Pow(Perlin.Fbm(point.x, Preferences.seed, point.x, 3), localFadeExponent) + Perlin.Fbm(point.x / 4f, Preferences.seed * 1.75f, point.x / 4f, 1) * 0.8f) * maxLocalHeight;
-        return heightMap;
-    }
-
-    MeshData GenerateChunk()
-    {
-        if (!pointsHaveBeenGenerated)
-        {
-            GetPoints();
-            pointsHaveBeenGenerated = true;
-        }
-
-        List<Triangle> triangles = new List<Triangle>();
-        int voxelsPerAxis = chunkSize - 1;
-        for (int z = 0; z < voxelsPerAxis; z++)
-        {
-            for (int y = 0; y < voxelsPerAxis; y++)
-            {
-                for (int x = 0; x < voxelsPerAxis; x++)
-                {
-                    CubeCorner[] cubeCorners =
-                    {
-                            GetCubeCorner(x, y, z),
-                            GetCubeCorner(x+1, y, z),
-                            GetCubeCorner(x+1, y, z+1),
-                            GetCubeCorner(x, y, z+1),
-                            GetCubeCorner(x, y+1, z),
-                            GetCubeCorner(x+1, y+1, z),
-                            GetCubeCorner(x+1, y+1, z+1),
-                            GetCubeCorner(x, y+1, z+1)
-                        };
-
-                    int configNumber = 0;
-                    for (int i = 0; i < 8; i++)
-                    {
-                        if (cubeCorners[i].value.x < 0)
-                        {
-                            configNumber |= (int)Mathf.Pow(2, i);
-                        }
-                    }
-
-                    for (int i = 0; triangulation[configNumber][i] != -1; i += 3)
-                    {
-                        int a0 = cornerIndexAFromEdge[triangulation[configNumber][i]];
-                        int b0 = cornerIndexBFromEdge[triangulation[configNumber][i]];
-
-                        int a1 = cornerIndexAFromEdge[triangulation[configNumber][i + 1]];
-                        int b1 = cornerIndexBFromEdge[triangulation[configNumber][i + 1]];
-
-                        int a2 = cornerIndexAFromEdge[triangulation[configNumber][i + 2]];
-                        int b2 = cornerIndexBFromEdge[triangulation[configNumber][i + 2]];
-
-                        Triangle tri;
-                        tri.a = InterpolateVerts(cubeCorners[a0], cubeCorners[b0]);
-                        tri.b = InterpolateVerts(cubeCorners[a1], cubeCorners[b1]);
-                        tri.c = InterpolateVerts(cubeCorners[a2], cubeCorners[b2]);
-                        tri.color = Color.white;
-                        triangles.Add(tri);
-                    }
-                }
-            }
-        }
-
-        int triangleCount = triangles.Count;
-
-
-        List<Vector3> vertices = new List<Vector3>();
-        List<Color> colors = new List<Color>();
-        int[] tris = new int[triangleCount * 3];
-
-        //Dictionary<Vector3, int> vertexToIndex = new Dictionary<Vector3, int>();
-
-
-        for (int i = 0; i < triangleCount; i++)
-        {
-            for (int j = 0; j < 3; j++)
-            {
-                //Vector3 vertex = triangles[i][j];
-                //Color color = triangles[i].color;
-                //if (vertexToIndex.ContainsKey(vertex))
-                //{
-                //    tris[i * 3 + j] = vertexToIndex[vertex];
-                //} else
-                //{
-                //    vertices.Add(vertex);
-                //    colors.Add(color);
-                //    int index = vertexToIndex.Count;
-                //    vertexToIndex.Add(vertex, index);
-                //    tris[i * 3 + j] = index;
-                //}
-
-                tris[i * 3 + j] = i * 3 + j;
-                vertices.Add(triangles[i][j]);
-                colors.Add(triangles[i].color);
-
-                //tris[i * 3 + j] = i * 3 + j;
-                //vertices[i * 3 + j] = triangles[i][j];
-                //colors[i * 3 + j] = triangles[i].color;
-            }
-        }
-
-        MeshData meshData;
-        meshData.vertices = vertices.ToArray();
-        meshData.colors = colors.ToArray();
-        meshData.triangles = tris;
-
-        return meshData;
-    }
-
-    private void OnApplicationQuit()
-    {
-        cancellationToken.Cancel();
-    }
-
-    void GetMesh()
-    {
-        if (pointsHaveBeenModified)
-        {
-            pointsHaveBeenModified = false;
-            CancellationToken token = cancellationToken.Token;
-            Task<MeshData> task = Task.Run(() =>
-            {
-                return GenerateChunk();
-            }, token);
-            task.ContinueWith(prevTask =>
-            {
-                if (!prevTask.IsCanceled)
-                {
-                    meshData = prevTask.Result;
-                    hasRequestMeshBuild = true;
-                    //prevTask.Dispose();
-                    if (meshData.vertices.Length > 0)
-                    {
-                        ChunkManager.instance.EnqueueChunk(this);
-                    }
-                }
-            }, TaskScheduler.FromCurrentSynchronizationContext());
-        }
-    }
-
-    public void TestIsSurfaceChunk()
-    {
-        if (mesh.vertexCount == 0)
-        {
-            return;
-        }
-        bool flag = false;
-        for (int i = 0; i < chunkSize; i++)
-        {
-            for (int j = 0; j < chunkSize; j++)
-            {
-                RaycastHit hit;
-                Vector3 origin = new Vector3(i, 0, j);
-                origin = transform.TransformPoint(origin);
-                origin.y = Preferences.maxTerrainHeight + 10;
-                if (Physics.Raycast(new Ray(origin, Vector3.down), out hit, Preferences.maxTerrainHeight + 10) && hit.transform.gameObject.Equals(gameObject))
-                {
-                    surfaceChunk = true;
-                    break;
-                }
-            }
-            if (flag) break;
-        }
-    }
-
-    public void GetTrees()
-    {
-        TestIsSurfaceChunk();
-        if (surfaceChunk)
-        {
-            Physics.queriesHitBackfaces = true;
-            float v = Mathf.PerlinNoise(coord.x * voxelsPerChunkAlmostOne, coord.z * voxelsPerChunkAlmostOne);
-            if (v > 0.3f)
-            {
-                int treeCount = (int)(Random.value * 8 * v);
-                for (int i = 0; i < treeCount; i++)
-                {
-                    Vector3 coords = new Vector3(Random.value * chunkSize, chunkSize, Random.value * chunkSize);
-                    RaycastHit hit;
-                    if (Physics.Raycast(new Ray(transform.TransformPoint(coords), Vector3.down), out hit, chunkSize) && hit.transform.gameObject.layer.Equals(LayerMask.NameToLayer("Terrain")))
-                    {
-                        if (Vector3.Dot(Vector3.down, hit.normal) < -0.75f)
-                        {
-                            GameObject newTree = GameObject.Instantiate(treePrefab, transform);
-                            newTree.transform.position = hit.point + Vector3.down * 0.075f;
-                        }
-                    }
-                }
-                Physics.queriesHitBackfaces = false;
-            }
-        }
-    }
-
+    /// <summary>
+    /// Requests the mesh be regenerated.
+    /// </summary>
     void NotifyPointsUpdate()
     {
         GetMesh();
     }
 
+    /// <summary>
+    /// Cancel running tasks when the application quits.
+    /// </summary>
+    private void OnApplicationQuit()
+    {
+        cancellationToken.Cancel();
+    }
 
+    /// <summary>
+    /// <c>MeshData</c> stores the data need to create a mesh: vertices, triangles,
+    /// and colors.
+    /// </summary>
     public struct MeshData
     {
         public Vector3[] vertices;
@@ -401,6 +494,9 @@ public class Chunk : MonoBehaviour
         public Color[] colors;
     }
 
+    /// <summary>
+    /// <c>Triangle</c> stores the three vertices of a triangle, and its color.
+    /// </summary>
     struct Triangle
     {
         public Vector3 a;
@@ -408,6 +504,11 @@ public class Chunk : MonoBehaviour
         public Vector3 c;
         public Color color;
 
+        /// <summary>
+        /// Allows the vertices a, b, c to be accesed with indices 0, 1, 2.
+        /// </summary>
+        /// <param name="index">The indice of the vertex to be referenced.</param>
+        /// <returns></returns>
         public Vector3 this[int index]
         {
             get
@@ -425,6 +526,10 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// A "constructor" function for the <c>struct CubeCorner</c>.
+    /// </summary>
+    /// <returns>An initialized <c>CubeCorner</c></returns>
     CubeCorner GetCubeCorner(int x, int y, int z)
     {
         CubeCorner corner;
@@ -433,19 +538,34 @@ public class Chunk : MonoBehaviour
         return corner;
     }
 
-    Vector3 InterpolateVerts(CubeCorner a, CubeCorner b)
+    /// <summary>
+    /// Uses linear interpolation to find the point between two <c>CubeCorner</c> 
+    /// where the value change is equal to <c>isoValue</c> 
+    /// </summary>
+    /// <param name="a">The first <c>CubeCorner</c></param>
+    /// <param name="b">The second <c>CubeCorner</c></param>
+    /// <param name="isoValue">The value which represents a surface. (Default=0f)</param>
+    /// <returns>The linearly interpolated <c>Vector3</c></returns>
+    Vector3 InterpolateVerts(CubeCorner a, CubeCorner b, float isoValue=0f)
     {
-        float t = (-a.value.x) / (b.value.x - a.value.x);
+        float t = (isoValue-a.value.x) / (b.value.x - a.value.x);
         t = Mathf.Clamp01(t);
         return a.position + t * (b.position - a.position);
     }
 
+    /// <summary>
+    /// The struct <c>CubeCorner</c> stores the position of a corner of a voxel
+    /// and its density value.
+    /// </summary>
     struct CubeCorner
     {
         public Vector3 position;
         public Vector2 value;
     }
 
+    /// <summary>
+    /// A lookup table for all the 256 configurations of Marching Cubes.
+    /// </summary>
     static readonly int[][] triangulation = {
             new int[] {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
             new int[] { 0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
@@ -704,6 +824,10 @@ public class Chunk : MonoBehaviour
             new int[] { 0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 },
             new int[] {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 }
         };
+
+    /// <summary>
+    /// A lookup table to get the first corner from an edge on a cube.
+    /// </summary>
     static readonly int[] cornerIndexAFromEdge = {
             0,
             1,
@@ -718,6 +842,10 @@ public class Chunk : MonoBehaviour
             2,
             3
         };
+
+    /// <summary>
+    /// A lookup table to get the second corner from an edge on a cube.
+    /// </summary>
     static readonly int[] cornerIndexBFromEdge = {
             1,
             2,

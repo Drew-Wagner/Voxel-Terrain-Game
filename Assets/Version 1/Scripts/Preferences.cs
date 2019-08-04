@@ -8,4 +8,6 @@ public static class Preferences
     public static float maxTerrainHeight = 256;
     public static float seed = "123".GetHashCode();
     public static float voxelDensity = 1;
+
+    public static float terrainScaler = 4;
 }
