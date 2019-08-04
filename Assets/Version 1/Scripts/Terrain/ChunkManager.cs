@@ -94,8 +94,8 @@ public class ChunkManager : MonoBehaviour
         sqrViewDist = viewDist * viewDist;
         minSqrViewDist = (chunkSize+1)*(chunkSize+1);
 
-        RenderSettings.fogEndDistance = viewDist * 0.6f;
-        RenderSettings.fogStartDistance = chunkSize * 2f;
+        RenderSettings.fogEndDistance = viewDist-(chunkSize*1.5f);
+        RenderSettings.fogStartDistance = viewDist - (chunkSize*2.5f);
         firstLoad = true;
     }
  
