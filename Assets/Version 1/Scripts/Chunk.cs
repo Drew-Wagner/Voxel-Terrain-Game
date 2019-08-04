@@ -326,7 +326,10 @@ public class Chunk : MonoBehaviour
                     meshData = prevTask.Result;
                     hasRequestMeshBuild = true;
                     //prevTask.Dispose();
-                    ChunkManager.instance.EnqueueChunk(this);
+                    if (meshData.vertices.Length > 0)
+                    {
+                        ChunkManager.instance.EnqueueChunk(this);
+                    }
                 }
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
-public class TreeGenerator : MonoBehaviour
+public class TerrainTree : MonoBehaviour
 {
     public Transform trunk;
     public Transform leaves;

@@ -69,7 +69,7 @@ public class RaycastManager : MonoBehaviour
                 } else
                 {
                     Debug.Log(hit.transform.gameObject.name);
-                    TreeGenerator tree = hit.transform.gameObject.GetComponentInParent<TreeGenerator>();
+                    TerrainTree tree = hit.transform.gameObject.GetComponentInParent<TerrainTree>();
                     tree.StartCoroutine("Shake");
                 }
             }
