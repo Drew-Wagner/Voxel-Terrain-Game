@@ -8,6 +8,10 @@ In the end, even the GPU was not able to handle the terrain to the extent I want
     
 Still, I ran into some major frame rate problems in certain situations. My solution, which I have yet to have the time to implement, is to have the Tasks post the prepared Mesh data to a queue, managed by the ChunkManager, instead of having the Chunk's own coroutine observe it. The ChunkManager will then dequeue the Mesh data and ensure that only a reasonable number of meshes are prepared per frame. If the nearby chunks are created when the player first loads into the map (or teleports), then the latency of the mesh generation shouldn't be noticeable.
 
+## Update - August 4th, 2019
+
+Created a repo specifically for the water system. Check it out [here](https://github.com/Drew-Wagner/Voxel-Water).
+
 ## Update - August 3rd, 2019
 
 Now that the basic terrain generation is stable, I've been playing around with 'spicying' it up a bit. I was able to quickly add basic procedurally generated trees to the game, but most of all, I have begun to experiment with water. I initally attempted to introduce it directly to the game, but found it was too hard to debug, so I created a seperate scene with only one basic terrain chunk, and one water chunk. I also cleaned up the code to make it easier to work with. Here is the latest demo:
