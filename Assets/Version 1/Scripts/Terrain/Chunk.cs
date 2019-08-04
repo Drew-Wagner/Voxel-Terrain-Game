@@ -14,7 +14,7 @@ public class Chunk : MonoBehaviour
 {
     public Vector3Int coord;
     public Vector3 chunkPosition;
-    public Bounds bounds;
+
     int chunkSize;
     int voxelsPerChunkSqr;
     float voxelsPerChunkAlmostOne;
@@ -105,8 +105,6 @@ public class Chunk : MonoBehaviour
         this.coord = coord;
         this.chunkPosition = coord * (chunkSize-1);
         transform.position = chunkPosition;
-
-        bounds = new Bounds(chunkPosition, Vector3.one * chunkSize);
 
         if (mesh == null)
             mesh = new Mesh();

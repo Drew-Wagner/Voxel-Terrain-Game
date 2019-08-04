@@ -19,7 +19,7 @@ public class TerrainTree : MonoBehaviour
     private void Awake()
     {
         rigidbody = GetComponent<Rigidbody>();
-        Vector2 point = new Vector3(transform.position.x, transform.position.z) / ChunkManager.instance.scaler;
+        Vector2 point = new Vector3(transform.position.x, transform.position.z) / Preferences.terrainScaler;
         float trunkHeight = 1f + Mathf.PerlinNoise(point.x, point.y) * 5.5f;
         float leavesRadius = 1f + Mathf.PerlinNoise(point.x + 1.5f, point.y) * 5f;
         float leavesHeight = 0.3f + Mathf.PerlinNoise(point.x, point.y + 1.5f) * 4.7f;
